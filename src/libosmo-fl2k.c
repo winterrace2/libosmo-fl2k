@@ -135,7 +135,7 @@ static int fl2k_read_reg(fl2k_dev_t *dev, uint16_t reg, uint32_t *val)
 				    0, reg, data, 4, CTRL_TIMEOUT);
 
 	if (r < 4)
-		fprintf(stderr, "Error, short read from register!\n");
+		fl2k_fprintf(stderr, "Error, short read from register!\n");
 
 	*val = (data[3] << 24) | (data[2] << 16) | (data[1] << 8) | data[0];
 
@@ -219,7 +219,7 @@ static double fl2k_reg_to_freq(uint32_t reg)
 	sample_clock += (uint32_t)offset * frac;
 	sample_clock /= out_div;
 
-//	fprintf(stderr, "div: %d\tod: %d\tfrac: %d\tmult %d\tclock: %f\treg "
+//	fl2k_fprintf(stderr, "div: %d\tod: %d\tfrac: %d\tmult %d\tclock: %f\treg "
 //			"%08x\n", div, out_div, frac, mult, sample_clock, reg);
 
 	return sample_clock;
@@ -263,7 +263,7 @@ int fl2k_set_sample_rate(fl2k_dev_t *dev, uint32_t target_freq)
 	dev->rate = sample_clock;
 
 	if (fabsf(error) > 1)
-		fprintf(stderr, "Requested sample rate %d not possible, using"
+		fl2k_fprintf(stderr, "Requested sample rate %d not possible, using"
 		                " %f, error is %f\n", target_freq, sample_clock, error); 
 
 	return fl2k_write_reg(dev, 0x802c, result_reg);
@@ -417,9 +417,9 @@ int fl2k_open(fl2k_dev_t **out_dev, uint32_t index)
 	r = libusb_open(device, &dev->devh);
 	libusb_free_device_list(list, 1);
 	if (r < 0) {
-		fprintf(stderr, "usb_open error %d\n", r);
+		fl2k_fprintf(stderr, "usb_open error %d\n", r);
 		if(r == LIBUSB_ERROR_ACCESS)
-			fprintf(stderr, "Please fix the device permissions, e.g. "
+			fl2k_fprintf(stderr, "Please fix the device permissions, e.g. "
 			"by installing the udev rules file\n");
 		goto err;
 	}
@@ -428,12 +428,12 @@ int fl2k_open(fl2k_dev_t **out_dev, uint32_t index)
 	 * need to detach the USB mass storage driver first in order to
 	 * open the device */
 	if (libusb_kernel_driver_active(dev->devh, 3) == 1) {
-		fprintf(stderr, "Kernel mass storage driver is attached, "
+		fl2k_fprintf(stderr, "Kernel mass storage driver is attached, "
 				"detaching driver. This may take more than"
 				" 10 seconds!\n");
 		r = libusb_detach_kernel_driver(dev->devh, 3);
 		if (r < 0) {
-			fprintf(stderr, "Failed to detach mass storage "
+			fl2k_fprintf(stderr, "Failed to detach mass storage "
 					"driver: %d\n", r);
 			goto err;
 		}
@@ -441,13 +441,13 @@ int fl2k_open(fl2k_dev_t **out_dev, uint32_t index)
 
 	r = libusb_claim_interface(dev->devh, 0);
 	if (r < 0) {
-		fprintf(stderr, "usb_claim_interface 0 error %d\n", r);
+		fl2k_fprintf(stderr, "usb_claim_interface 0 error %d\n", r);
 		goto err;
 	}
 	r = libusb_claim_interface(dev->devh, 1);
 
 	if (r < 0) {
-		fprintf(stderr, "usb_claim_interface 1 error %d\n", r);
+		fl2k_fprintf(stderr, "usb_claim_interface 1 error %d\n", r);
 		goto err;
 	}
 
@@ -560,7 +560,7 @@ static void LIBUSB_CALL _libusb_callback(struct libusb_transfer *xfer)
 			dev->dev_lost = 1;
 			fl2k_stop_tx(dev);
 			pthread_cond_signal(&dev->buf_cond);
-			fprintf(stderr, "cb transfer status: %d, "
+			fl2k_fprintf(stderr, "cb transfer status: %d, "
 				"canceling...\n", xfer->status);
 	}
 }
@@ -585,7 +585,7 @@ static int fl2k_alloc_submit_transfers(fl2k_dev_t *dev)
 	memset(dev->xfer_info, 0, dev->xfer_buf_num * sizeof(fl2k_xfer_info_t));
 
 #if defined (__linux__) && LIBUSB_API_VERSION >= 0x01000105
-	fprintf(stderr, "Allocating %d zero-copy buffers\n", dev->xfer_buf_num);
+	fl2k_fprintf(stderr, "Allocating %d zero-copy buffers\n", dev->xfer_buf_num);
 
 	dev->use_zerocopy = 1;
 	for (i = 0; i < dev->xfer_buf_num; ++i) {
@@ -601,14 +601,14 @@ static int fl2k_alloc_submit_transfers(fl2k_dev_t *dev)
 			if (dev->xfer_buf[i][0] || memcmp(dev->xfer_buf[i],
 							  dev->xfer_buf[i] + 1,
 							  dev->xfer_buf_len - 1)) {
-				fprintf(stderr, "Detected Kernel usbfs mmap() "
+				fl2k_fprintf(stderr, "Detected Kernel usbfs mmap() "
 						"bug, falling back to buffers "
 						"in userspace\n");
 				dev->use_zerocopy = 0;
 				break;
 			}
 		} else {
-			fprintf(stderr, "Failed to allocate zero-copy "
+			fl2k_fprintf(stderr, "Failed to allocate zero-copy "
 					"buffer for transfer %d\nFalling "
 					"back to buffers in userspace\n", i);
 			dev->use_zerocopy = 0;
@@ -664,7 +664,7 @@ static int fl2k_alloc_submit_transfers(fl2k_dev_t *dev)
 		dev->xfer_info[i].state = BUF_SUBMITTED;
 
 		if (r < 0) {
-			fprintf(stderr, "Failed to submit transfer %i\n"
+			fl2k_fprintf(stderr, "Failed to submit transfer %i\n"
 					"Please increase your allowed " 
 					"usbfs buffer size with the "
 					"following command:\n"
@@ -735,7 +735,7 @@ static void *fl2k_usb_worker(void *arg)
 		r = libusb_handle_events_timeout_completed(dev->ctx, &tv,
 							   &dev->async_cancel);
 		if (r < 0) {
-			/*fprintf(stderr, "handle_events returned: %d\n", r);*/
+			/*fl2k_fprintf(stderr, "handle_events returned: %d\n", r);*/
 			if (r == LIBUSB_ERROR_INTERRUPTED) /* stray signal */
 				continue;
 			break;
@@ -870,7 +870,7 @@ static void *fl2k_sample_worker(void *arg)
 		data_info.ctx = dev->cb_ctx;
 
 		if (dev->underflow_cnt > underflows) {
-			fprintf(stderr, "Underflow! Skipped %d buffers\n",
+			fl2k_fprintf(stderr, "Underflow! Skipped %d buffers\n",
 					dev->underflow_cnt - underflows);
 			underflows = dev->underflow_cnt;
 		}
@@ -889,7 +889,7 @@ static void *fl2k_sample_worker(void *arg)
 
 			xfer = fl2k_get_next_xfer(dev, BUF_EMPTY);
 			if (!xfer) {
-				fprintf(stderr, "no free transfer, skipping"
+				fl2k_fprintf(stderr, "no free transfer, skipping"
 						" input buffer\n");
 				continue;
 			}
@@ -961,14 +961,14 @@ int fl2k_start_tx(fl2k_dev_t *dev, fl2k_tx_cb_t cb, void *ctx,
 	r = pthread_create(&dev->usb_worker_thread, &attr,
 			   fl2k_usb_worker, (void *)dev);
 	if (r < 0) {
-		fprintf(stderr, "Error spawning USB worker thread!\n");
+		fl2k_fprintf(stderr, "Error spawning USB worker thread!\n");
 		goto cleanup;
 	}
 
 	r = pthread_create(&dev->sample_worker_thread, &attr,
 			   fl2k_sample_worker, (void *)dev);
 	if (r < 0) {
-		fprintf(stderr, "Error spawning sample worker thread!\n");
+		fl2k_fprintf(stderr, "Error spawning sample worker thread!\n");
 		goto cleanup;
 	}
 

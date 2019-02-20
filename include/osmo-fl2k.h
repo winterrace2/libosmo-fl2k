@@ -29,6 +29,7 @@ extern "C" {
 
 #include <stdint.h>
 #include <osmo-fl2k_export.h>
+#include "redir_print.h"
 
 enum fl2k_error {
 	FL2K_SUCCESS = 0,
